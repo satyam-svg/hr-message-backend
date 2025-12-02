@@ -1,0 +1,9 @@
+{
+  "name": "hr_backend",
+  "version": "1.0.0",
+  "description": "HR Backend with Prisma and Go",
+  "private": true,
+  "devDependencies": {
+    "prisma": "^6.19.0"
+  }
+}
