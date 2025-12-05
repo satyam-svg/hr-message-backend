@@ -30,3 +30,11 @@ type SaveContactRequest struct {
 	CompanyName string `json:"company_name" validate:"required"`
 	Email       string `json:"email" validate:"required,email"`
 }
+
+// UpdateContactRequest represents the request to update a contact
+type UpdateContactRequest struct {
+	Name        *string `json:"name"`
+	CompanyName *string `json:"company_name"`
+	Email       *string `json:"email"`
+	IsSent      *bool   `json:"is_sent"`
+}

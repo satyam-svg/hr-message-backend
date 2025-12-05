@@ -124,15 +124,16 @@ func (h *TemplateHandler) EnhanceTemplate(c *fiber.Ctx) error {
 	prompt := fmt.Sprintf(`Enhance the following email template content to make it sound professional, persuasive, and human-written.
 	- Improve clarity, flow, and professionalism.
 	- Use a natural, polite, and confident tone.
-	- Do NOT use markdown headings (like # or ##).
-	- You MAY use bullet points (-) for lists if it improves readability.
-	- You MAY use bolding (**) sparingly for emphasis on key achievements.
+	- Do NOT use markdown formatting (like ** or ##).
+	- Use HTML <b> tags sparingly for emphasis on key achievements or important keywords.
+	- ALWAYS use HTML <b> tags for technical skills, programming languages, frameworks, and tools (e.g. <b>React</b>, <b>Go</b>, <b>AWS</b>).
+	- Use HTML <br> tags for line breaks to ensuring proper formatting.
 	- Ensure placeholders like {Company}, {Position}, {Hiring Manager Name} etc., are preserved exactly as is.
-	- The output should be ready to send as a real email.
-	
+	- The output should be valid HTML ready to be embedded in an email body.
+
 	Content:
 	%s
-	
+
 	Return the result as a JSON object with the following structure:
 	{
 		"enhanced_content": "The enhanced text here"

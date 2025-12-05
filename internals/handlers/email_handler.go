@@ -20,6 +20,24 @@ func NewEmailHandler(emailService *services.EmailService) *EmailHandler {
 	}
 }
 
+// StartCampaign handles starting an email campaign
+// POST /api/email/campaign/start
+func (h *EmailHandler) StartCampaign(c *fiber.Ctx) error {
+	userId := c.Locals("userId").(string)
+
+	if err := h.emailService.StartEmailCampaign(userId); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse{
+			Error:   "campaign_error",
+			Message: "Failed to start campaign: " + err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Email campaign started in background",
+		"success": true,
+	})
+}
+
 // SendEmail handles sending an email
 // POST /api/email/send
 func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
@@ -32,9 +50,12 @@ func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
 	// Handle multipart/form-data (with file uploads)
 	if len(contentType) > 19 && contentType[:19] == "multipart/form-data" {
 		// Parse form fields
+		req.SendToAll = c.FormValue("send_to_all") == "true"
 		req.SenderEmail = c.FormValue("sender_email")
 		req.SenderPassword = c.FormValue("sender_password")
-		req.RecipientEmail = c.FormValue("recipient_email")
+		if !req.SendToAll {
+			req.RecipientEmail = c.FormValue("recipient_email")
+		}
 		req.Subject = c.FormValue("subject")
 		req.Body = c.FormValue("body")
 
@@ -77,23 +98,33 @@ func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.SenderEmail == "" || req.SenderPassword == "" || req.RecipientEmail == "" || req.Subject == "" || req.Body == "" {
+	if req.SenderEmail == "" || req.SenderPassword == "" || req.Subject == "" || req.Body == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
 			Error:   "validation_error",
-			Message: "All fields are required: sender_email, sender_password, recipient_email, subject, body",
+			Message: "Required fields missing: sender_email, sender_password, subject, body",
 		})
 	}
 
-	// Call service to send email
-	if err := h.emailService.SendEmail(req); err != nil {
+	if !req.SendToAll && req.RecipientEmail == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
+			Error:   "validation_error",
+			Message: "recipient_email is required when send_to_all is false",
+		})
+	}
+
+	// Get UserID from context
+	userId := c.Locals("userId").(string)
+
+	// Call service to send email in background
+	if err := h.emailService.SendEmailBackground(userId, req); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse{
 			Error:   "server_error",
-			Message: "Failed to send email: " + err.Error(),
+			Message: "Failed to start background email: " + err.Error(),
 		})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(models.SendEmailResponse{
-		Message: "Email sent successfully",
+		Message: "Email sending started in background",
 		Success: true,
 	})
 }

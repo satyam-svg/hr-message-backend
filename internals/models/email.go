@@ -4,9 +4,10 @@ package models
 type SendEmailRequest struct {
 	SenderEmail     string   `json:"sender_email" validate:"required,email"`
 	SenderPassword  string   `json:"sender_password" validate:"required"`
-	RecipientEmail  string   `json:"recipient_email" validate:"required,email"`
+	RecipientEmail  string   `json:"recipient_email"`
 	Subject         string   `json:"subject" validate:"required"`
 	Body            string   `json:"body" validate:"required"`
+	SendToAll       bool     `json:"send_to_all"`                // If true, sends to all contacts
 	AttachmentPaths []string `json:"attachment_paths,omitempty"` // Optional file paths for attachments
 }
 

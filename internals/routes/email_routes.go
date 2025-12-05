@@ -13,4 +13,5 @@ func SetupEmailRoutes(app *fiber.App, emailHandler *handlers.EmailHandler) {
 
 	// Protected routes
 	email.Post("/send", middleware.AuthRequired(), emailHandler.SendEmail)
+	email.Post("/campaign/start", middleware.AuthRequired(), emailHandler.StartCampaign)
 }

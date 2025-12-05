@@ -55,27 +55,30 @@ func main() {
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: false,
 	}))
 
 	// Initialize services
 	authService := services.NewAuthService(client)
-	emailService := services.NewEmailService()
+	emailService := services.NewEmailService(client)
 	templateService := services.NewTemplateService(client)
+	contactService := services.NewContactServcie(client)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	emailHandler := handlers.NewEmailHandler(emailService)
 	pdfHandler := handlers.NewPDFHandler(client)
 	templateHandler := handlers.NewTemplateHandler(templateService)
+	contactHandler := handlers.NewContactHandler(contactService)
 
 	// Setup routes
 	routes.SetupAuthRoutes(app, authHandler)
 	routes.SetupEmailRoutes(app, emailHandler)
 	routes.SetupPDFRoutes(app, pdfHandler)
 	routes.SetupTemplateRoutes(app, templateHandler)
+	routes.SetupContactRoutes(app, contactHandler)
 
 	// Health check endpoint
 	app.Get("/", func(c *fiber.Ctx) error {

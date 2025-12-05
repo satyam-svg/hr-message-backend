@@ -69,7 +69,7 @@ func (s *AuthService) Signup(ctx context.Context, req models.SignupRequest) (*mo
 	defaultSubject := "Application for {Position} at {Company}"
 	defaultBody := `Dear {Hiring Manager Name},
 
-I hope you are doing well. My name is Praveen Maurya, and I am currently in my final year at IIIT Ranchi, pursuing B.Tech in Electronics and Communication Engineering. I am writing to express my interest in the {Position} role at {Company}.
+I hope you are doing well. My name is Praveen Maurya, and I am currently in my final year at IIIT Ranchi, pursuing B.Tech in Electronics and Communication Engineering. I am writing to express my interest in the Software Engineering Role  role at {Company}.
 
 I bring strong full-stack development experience, having built high-scale systems using Go, React/Next.js, Node.js, PostgreSQL, Redis, and cloud services like AWS (EC2, RDS, S3). I have also developed multiple 3D/Interactive applications using Three.js, WebGL, and advanced animation systems, which I believe aligns well with companies working on modern web technologies.
 
@@ -101,13 +101,19 @@ Thank you for considering my application. I look forward to hearing from you.
 
 Best regards,
 Praveen Maurya
-Email: satyammaurya9620@gmail.com
+
+
+Email: praveen.2022ug2002@iiitranchi.ac.in
+
+Contact: 8302252848
+
+GitHub: https://github.com/satyam-svg
+
+Resume: https://drive.google.com/file/d/129hWwlFE7KeGBNSuiWqbU5x9BB7gvrKl/view?usp=drive_link
 
 Portfolio: https://iampraveen.vercel.app
 
-LinkedIn: https://www.linkedin.com/in/praveenmaurya07
-
-GitHub: https://github.com/satyam-svg`
+LinkedIn: https://www.linkedin.com/in/praveen-maurya-5aa355214/`
 
 	_, err = s.client.Template.CreateOne(
 		db.Template.Name.Set("Default Template"),
@@ -302,9 +308,11 @@ Email: satyammaurya9620@gmail.com
 
 Portfolio: https://iampraveen.vercel.app
 
-LinkedIn: https://www.linkedin.com/in/praveenmaurya07
+LinkedIn: https://www.linkedin.com/in/praveen-maurya-5aa355214/
 
-GitHub: https://github.com/satyam-svg`
+GitHub: https://github.com/satyam-svg
+
+Resume: https://drive.google.com/file/d/129hWwlFE7KeGBNSuiWqbU5x9BB7gvrKl/view?usp=drive_link`
 
 		newTemplate, err := s.client.Template.CreateOne(
 			db.Template.Name.Set("Default Template"),
