@@ -9,7 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/generative-ai-go/genai"
-	"github.com/satyam-svg/hr_backend/prisma/db"
+	"github.com/satyam-svg/hr-message-backend/prisma/db"
 	"google.golang.org/api/option"
 )
 

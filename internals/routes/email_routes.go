@@ -2,8 +2,8 @@ package routes
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/satyam-svg/hr_backend/internals/handlers"
-	"github.com/satyam-svg/hr_backend/internals/middleware"
+	"github.com/satyam-svg/hr-message-backend/internals/handlers"
+	"github.com/satyam-svg/hr-message-backend/internals/middleware"
 )
 
 // SetupEmailRoutes sets up email routes

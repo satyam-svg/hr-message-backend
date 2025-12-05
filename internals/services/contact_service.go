@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/satyam-svg/hr_backend/internals/models"
-	"github.com/satyam-svg/hr_backend/prisma/db"
+	"github.com/satyam-svg/hr-message-backend/internals/models"
+	"github.com/satyam-svg/hr-message-backend/prisma/db"
 )
 
 type ContactService struct {

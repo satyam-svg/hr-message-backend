@@ -9,8 +9,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/generative-ai-go/genai"
-	"github.com/satyam-svg/hr_backend/internals/models"
-	"github.com/satyam-svg/hr_backend/internals/services"
+	"github.com/satyam-svg/hr-message-backend/internals/models"
+	"github.com/satyam-svg/hr-message-backend/internals/services"
 	"google.golang.org/api/option"
 )
 

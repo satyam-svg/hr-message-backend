@@ -1,4 +1,4 @@
-module github.com/satyam-svg/hr_backend
+module github.com/satyam-svg/hr-message-backend
 
 go 1.24.4
 

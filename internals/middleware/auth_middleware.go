@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/satyam-svg/hr_backend/internals/models"
-	"github.com/satyam-svg/hr_backend/internals/utils"
+	"github.com/satyam-svg/hr-message-backend/internals/models"
+	"github.com/satyam-svg/hr-message-backend/internals/utils"
 )
 
 // AuthRequired middleware validates JWT token

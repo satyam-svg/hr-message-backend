@@ -12,10 +12,10 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/joho/godotenv"
-	"github.com/satyam-svg/hr_backend/internals/handlers"
-	"github.com/satyam-svg/hr_backend/internals/routes"
-	"github.com/satyam-svg/hr_backend/internals/services"
-	"github.com/satyam-svg/hr_backend/prisma/db"
+	"github.com/satyam-svg/hr-message-backend/internals/handlers"
+	"github.com/satyam-svg/hr-message-backend/internals/routes"
+	"github.com/satyam-svg/hr-message-backend/internals/services"
+	"github.com/satyam-svg/hr-message-backend/prisma/db"
 )
 
 func main() {
