@@ -35,17 +35,27 @@ type UserResponse struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ActivityResponse represents a single activity log
+type ActivityResponse struct {
+	ID          string    `json:"id"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // UserProfileResponse represents full user profile data
 type UserProfileResponse struct {
-	ID                string            `json:"id"`
-	Email             string            `json:"email"`
-	Name              string            `json:"name"`
-	ProfessionalEmail string            `json:"professional_email,omitempty"`
-	MailAppPassword   string            `json:"mail_app_password,omitempty"`
-	DailyLimit        int               `json:"daily_limit"`
-	CreatedAt         time.Time         `json:"created_at"`
-	Contacts          []ContactResponse `json:"contacts"`
-	Template          *TemplateResponse `json:"template,omitempty"`
+	ID                string             `json:"id"`
+	Email             string             `json:"email"`
+	Name              string             `json:"name"`
+	ProfessionalEmail string             `json:"professional_email,omitempty"`
+	MailAppPassword   string             `json:"mail_app_password,omitempty"`
+	DailyLimit        int                `json:"daily_limit"`
+	PdfUploadCount    int                `json:"pdf_upload_count"`
+	EmailsSent        int                `json:"emails_sent"`
+	CreatedAt         time.Time          `json:"created_at"`
+	Contacts          []ContactResponse  `json:"contacts"`
+	Activities        []ActivityResponse `json:"activities"`
+	Template          *TemplateResponse  `json:"template,omitempty"`
 }
 
 // ErrorResponse represents error response

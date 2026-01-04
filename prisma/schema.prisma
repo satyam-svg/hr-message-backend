@@ -18,12 +18,15 @@ model User {
   professionalEmail     String?
   mailAppPassword       String?
   dailyLimit            Int       @default(20)
+  pdfUploadCount        Int       @default(0)
+  emailsSent            Int       @default(0)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   
   // Relations
   contacts              Contact[]
   template              Template?
+  activities            Activity[]
 }
 
 model Contact {
@@ -54,4 +57,14 @@ model Template {
   // Foreign key
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  description String
+  createdAt   DateTime @default(now())
+  
+  // Foreign key
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

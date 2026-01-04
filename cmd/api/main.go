@@ -65,11 +65,12 @@ func main() {
 	emailService := services.NewEmailService(client)
 	templateService := services.NewTemplateService(client)
 	contactService := services.NewContactServcie(client)
+	userService := services.NewUserService(client)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	emailHandler := handlers.NewEmailHandler(emailService)
-	pdfHandler := handlers.NewPDFHandler(client)
+	pdfHandler := handlers.NewPDFHandler(client, userService)
 	templateHandler := handlers.NewTemplateHandler(templateService)
 	contactHandler := handlers.NewContactHandler(contactService)
 

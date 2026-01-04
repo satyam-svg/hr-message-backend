@@ -93,12 +93,15 @@ model User {
   professionalEmail String?
   mailAppPassword   String?
   dailyLimit        Int      @default(20)
+  pdfUploadCount    Int      @default(0)
+  emailsSent        Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   // Relations
-  contacts Contact[]
-  template Template?
+  contacts   Contact[]
+  template   Template?
+  activities Activity[]
 }
 
 model Contact {
@@ -128,6 +131,16 @@ model Template {
 
   // Foreign key
   userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  description String
+  createdAt   DateTime @default(now())
+
+  // Foreign key
+  userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 `
@@ -204,6 +217,7 @@ func newClient() *PrismaClient {
 	c.User = userActions{client: c}
 	c.Contact = contactActions{client: c}
 	c.Template = templateActions{client: c}
+	c.Activity = activityActions{client: c}
 
 	c.Prisma = &PrismaActions{
 		Raw: &raw.Raw{Engine: c},
@@ -234,6 +248,8 @@ type PrismaClient struct {
 	Contact contactActions
 	// Template provides access to CRUD methods.
 	Template templateActions
+	// Activity provides access to CRUD methods.
+	Activity activityActions
 }
 
 // --- template enums.gotpl ---
@@ -257,6 +273,8 @@ const (
 	UserScalarFieldEnumProfessionalEmail UserScalarFieldEnum = "professionalEmail"
 	UserScalarFieldEnumMailAppPassword   UserScalarFieldEnum = "mailAppPassword"
 	UserScalarFieldEnumDailyLimit        UserScalarFieldEnum = "dailyLimit"
+	UserScalarFieldEnumPdfUploadCount    UserScalarFieldEnum = "pdfUploadCount"
+	UserScalarFieldEnumEmailsSent        UserScalarFieldEnum = "emailsSent"
 	UserScalarFieldEnumCreatedAt         UserScalarFieldEnum = "createdAt"
 	UserScalarFieldEnumUpdatedAt         UserScalarFieldEnum = "updatedAt"
 )
@@ -284,6 +302,15 @@ const (
 	TemplateScalarFieldEnumCreatedAt TemplateScalarFieldEnum = "createdAt"
 	TemplateScalarFieldEnumUpdatedAt TemplateScalarFieldEnum = "updatedAt"
 	TemplateScalarFieldEnumUserID    TemplateScalarFieldEnum = "userId"
+)
+
+type ActivityScalarFieldEnum string
+
+const (
+	ActivityScalarFieldEnumID          ActivityScalarFieldEnum = "id"
+	ActivityScalarFieldEnumDescription ActivityScalarFieldEnum = "description"
+	ActivityScalarFieldEnumCreatedAt   ActivityScalarFieldEnum = "createdAt"
+	ActivityScalarFieldEnumUserID      ActivityScalarFieldEnum = "userId"
 )
 
 type SortOrder string
@@ -354,6 +381,10 @@ const userFieldMailAppPassword userPrismaFields = "mailAppPassword"
 
 const userFieldDailyLimit userPrismaFields = "dailyLimit"
 
+const userFieldPdfUploadCount userPrismaFields = "pdfUploadCount"
+
+const userFieldEmailsSent userPrismaFields = "emailsSent"
+
 const userFieldCreatedAt userPrismaFields = "createdAt"
 
 const userFieldUpdatedAt userPrismaFields = "updatedAt"
@@ -361,6 +392,8 @@ const userFieldUpdatedAt userPrismaFields = "updatedAt"
 const userFieldContacts userPrismaFields = "contacts"
 
 const userFieldTemplate userPrismaFields = "template"
+
+const userFieldActivities userPrismaFields = "activities"
 
 type contactPrismaFields = prismaFields
 
@@ -400,6 +433,18 @@ const templateFieldUserID templatePrismaFields = "userId"
 
 const templateFieldUser templatePrismaFields = "user"
 
+type activityPrismaFields = prismaFields
+
+const activityFieldID activityPrismaFields = "id"
+
+const activityFieldDescription activityPrismaFields = "description"
+
+const activityFieldCreatedAt activityPrismaFields = "createdAt"
+
+const activityFieldUserID activityPrismaFields = "userId"
+
+const activityFieldUser activityPrismaFields = "user"
+
 // --- template mock.gotpl ---
 func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 	expectations := new([]mock.Expectation)
@@ -422,6 +467,10 @@ func NewMock() (*PrismaClient, *Mock, func(t *testing.T)) {
 		mock: m,
 	}
 
+	m.Activity = activityMock{
+		mock: m,
+	}
+
 	return pc, m, m.Ensure
 }
 
@@ -433,6 +482,8 @@ type Mock struct {
 	Contact contactMock
 
 	Template templateMock
+
+	Activity activityMock
 }
 
 type userMock struct {
@@ -561,6 +612,48 @@ func (m *templateMockExec) Errors(err error) {
 	})
 }
 
+type activityMock struct {
+	mock *Mock
+}
+
+type ActivityMockExpectParam interface {
+	ExtractQuery() builder.Query
+	activityModel()
+}
+
+func (m *activityMock) Expect(query ActivityMockExpectParam) *activityMockExec {
+	return &activityMockExec{
+		mock:  m.mock,
+		query: query.ExtractQuery(),
+	}
+}
+
+type activityMockExec struct {
+	mock  *Mock
+	query builder.Query
+}
+
+func (m *activityMockExec) Returns(v ActivityModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *activityMockExec) ReturnsMany(v []ActivityModel) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query: m.query,
+		Want:  &v,
+	})
+}
+
+func (m *activityMockExec) Errors(err error) {
+	*m.mock.Expectations = append(*m.mock.Expectations, mock.Expectation{
+		Query:   m.query,
+		WantErr: err,
+	})
+}
+
 // --- template models.gotpl ---
 
 // UserModel represents the User model and is a wrapper for accessing fields and methods
@@ -578,6 +671,8 @@ type InnerUser struct {
 	ProfessionalEmail *string  `json:"professionalEmail,omitempty"`
 	MailAppPassword   *string  `json:"mailAppPassword,omitempty"`
 	DailyLimit        int      `json:"dailyLimit"`
+	PdfUploadCount    int      `json:"pdfUploadCount"`
+	EmailsSent        int      `json:"emailsSent"`
 	CreatedAt         DateTime `json:"createdAt"`
 	UpdatedAt         DateTime `json:"updatedAt"`
 }
@@ -591,14 +686,17 @@ type RawUserModel struct {
 	ProfessionalEmail *RawString  `json:"professionalEmail,omitempty"`
 	MailAppPassword   *RawString  `json:"mailAppPassword,omitempty"`
 	DailyLimit        RawInt      `json:"dailyLimit"`
+	PdfUploadCount    RawInt      `json:"pdfUploadCount"`
+	EmailsSent        RawInt      `json:"emailsSent"`
 	CreatedAt         RawDateTime `json:"createdAt"`
 	UpdatedAt         RawDateTime `json:"updatedAt"`
 }
 
 // RelationsUser holds the relation data separately
 type RelationsUser struct {
-	Contacts []ContactModel `json:"contacts,omitempty"`
-	Template *TemplateModel `json:"template,omitempty"`
+	Contacts   []ContactModel  `json:"contacts,omitempty"`
+	Template   *TemplateModel  `json:"template,omitempty"`
+	Activities []ActivityModel `json:"activities,omitempty"`
 }
 
 func (r UserModel) ProfessionalEmail() (value String, ok bool) {
@@ -627,6 +725,13 @@ func (r UserModel) Template() (value *TemplateModel, ok bool) {
 		return value, false
 	}
 	return r.RelationsUser.Template, true
+}
+
+func (r UserModel) Activities() (value []ActivityModel) {
+	if r.RelationsUser.Activities == nil {
+		panic("attempted to access activities but did not fetch it using the .With() syntax")
+	}
+	return r.RelationsUser.Activities
 }
 
 // ContactModel represents the Contact model and is a wrapper for accessing fields and methods
@@ -711,6 +816,40 @@ func (r TemplateModel) User() (value *UserModel) {
 	return r.RelationsTemplate.User
 }
 
+// ActivityModel represents the Activity model and is a wrapper for accessing fields and methods
+type ActivityModel struct {
+	InnerActivity
+	RelationsActivity
+}
+
+// InnerActivity holds the actual data
+type InnerActivity struct {
+	ID          string   `json:"id"`
+	Description string   `json:"description"`
+	CreatedAt   DateTime `json:"createdAt"`
+	UserID      string   `json:"userId"`
+}
+
+// RawActivityModel is a struct for Activity when used in raw queries
+type RawActivityModel struct {
+	ID          RawString   `json:"id"`
+	Description RawString   `json:"description"`
+	CreatedAt   RawDateTime `json:"createdAt"`
+	UserID      RawString   `json:"userId"`
+}
+
+// RelationsActivity holds the relation data separately
+type RelationsActivity struct {
+	User *UserModel `json:"user,omitempty"`
+}
+
+func (r ActivityModel) User() (value *UserModel) {
+	if r.RelationsActivity.User == nil {
+		panic("attempted to access user but did not fetch it using the .With() syntax")
+	}
+	return r.RelationsActivity.User
+}
+
 // --- template query.gotpl ---
 
 // User acts as a namespaces to access query methods for the User model
@@ -755,6 +894,16 @@ type userQuery struct {
 	// @required
 	DailyLimit userQueryDailyLimitInt
 
+	// PdfUploadCount
+	//
+	// @required
+	PdfUploadCount userQueryPdfUploadCountInt
+
+	// EmailsSent
+	//
+	// @required
+	EmailsSent userQueryEmailsSentInt
+
 	// CreatedAt
 	//
 	// @required
@@ -768,6 +917,8 @@ type userQuery struct {
 	Contacts userQueryContactsRelations
 
 	Template userQueryTemplateRelations
+
+	Activities userQueryActivitiesRelations
 }
 
 func (userQuery) Not(params ...UserWhereParam) userDefaultParam {
@@ -3393,6 +3544,804 @@ func (r userQueryDailyLimitInt) Field() userPrismaFields {
 }
 
 // base struct
+type userQueryPdfUploadCountInt struct{}
+
+// Set the required value of PdfUploadCount
+func (r userQueryPdfUploadCountInt) Set(value int) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "pdfUploadCount",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of PdfUploadCount dynamically
+func (r userQueryPdfUploadCountInt) SetIfPresent(value *Int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of PdfUploadCount
+func (r userQueryPdfUploadCountInt) Increment(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) IncrementIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of PdfUploadCount
+func (r userQueryPdfUploadCountInt) Decrement(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) DecrementIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of PdfUploadCount
+func (r userQueryPdfUploadCountInt) Multiply(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) MultiplyIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of PdfUploadCount
+func (r userQueryPdfUploadCountInt) Divide(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) DivideIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Equals(value int) userWithPrismaPdfUploadCountEqualsParam {
+
+	return userWithPrismaPdfUploadCountEqualsParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) EqualsIfPresent(value *int) userWithPrismaPdfUploadCountEqualsParam {
+	if value == nil {
+		return userWithPrismaPdfUploadCountEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "pdfUploadCount",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) Cursor(cursor int) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "pdfUploadCount",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) In(value []int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) InIfPresent(value []int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r userQueryPdfUploadCountInt) NotIn(value []int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) NotInIfPresent(value []int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r userQueryPdfUploadCountInt) Lt(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) LtIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Lte(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) LteIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Gt(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) GtIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Gte(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) GteIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Not(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryPdfUploadCountInt) NotIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r userQueryPdfUploadCountInt) LT(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r userQueryPdfUploadCountInt) LTIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r userQueryPdfUploadCountInt) LTE(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r userQueryPdfUploadCountInt) LTEIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r userQueryPdfUploadCountInt) GT(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r userQueryPdfUploadCountInt) GTIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r userQueryPdfUploadCountInt) GTE(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "pdfUploadCount",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r userQueryPdfUploadCountInt) GTEIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r userQueryPdfUploadCountInt) Field() userPrismaFields {
+	return userFieldPdfUploadCount
+}
+
+// base struct
+type userQueryEmailsSentInt struct{}
+
+// Set the required value of EmailsSent
+func (r userQueryEmailsSentInt) Set(value int) userSetParam {
+
+	return userSetParam{
+		data: builder.Field{
+			Name:  "emailsSent",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of EmailsSent dynamically
+func (r userQueryEmailsSentInt) SetIfPresent(value *Int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+// Increment the required value of EmailsSent
+func (r userQueryEmailsSentInt) Increment(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "increment",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) IncrementIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Increment(*value)
+}
+
+// Decrement the required value of EmailsSent
+func (r userQueryEmailsSentInt) Decrement(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "decrement",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) DecrementIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Decrement(*value)
+}
+
+// Multiply the required value of EmailsSent
+func (r userQueryEmailsSentInt) Multiply(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "multiply",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) MultiplyIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Multiply(*value)
+}
+
+// Divide the required value of EmailsSent
+func (r userQueryEmailsSentInt) Divide(value int) userSetParam {
+	return userSetParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				builder.Field{
+					Name:  "divide",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) DivideIfPresent(value *int) userSetParam {
+	if value == nil {
+		return userSetParam{}
+	}
+	return r.Divide(*value)
+}
+
+func (r userQueryEmailsSentInt) Equals(value int) userWithPrismaEmailsSentEqualsParam {
+
+	return userWithPrismaEmailsSentEqualsParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) EqualsIfPresent(value *int) userWithPrismaEmailsSentEqualsParam {
+	if value == nil {
+		return userWithPrismaEmailsSentEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r userQueryEmailsSentInt) Order(direction SortOrder) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name:  "emailsSent",
+			Value: direction,
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) Cursor(cursor int) userCursorParam {
+	return userCursorParam{
+		data: builder.Field{
+			Name:  "emailsSent",
+			Value: cursor,
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) In(value []int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) InIfPresent(value []int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r userQueryEmailsSentInt) NotIn(value []int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) NotInIfPresent(value []int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r userQueryEmailsSentInt) Lt(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) LtIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r userQueryEmailsSentInt) Lte(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) LteIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r userQueryEmailsSentInt) Gt(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) GtIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r userQueryEmailsSentInt) Gte(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) GteIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r userQueryEmailsSentInt) Not(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryEmailsSentInt) NotIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r userQueryEmailsSentInt) LT(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r userQueryEmailsSentInt) LTIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.LT(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r userQueryEmailsSentInt) LTE(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r userQueryEmailsSentInt) LTEIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.LTE(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r userQueryEmailsSentInt) GT(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r userQueryEmailsSentInt) GTIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.GT(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r userQueryEmailsSentInt) GTE(value int) userDefaultParam {
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "emailsSent",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r userQueryEmailsSentInt) GTEIfPresent(value *int) userDefaultParam {
+	if value == nil {
+		return userDefaultParam{}
+	}
+	return r.GTE(*value)
+}
+
+func (r userQueryEmailsSentInt) Field() userPrismaFields {
+	return userFieldEmailsSent
+}
+
+// base struct
 type userQueryCreatedAtDateTime struct{}
 
 // Set the required value of CreatedAt
@@ -4272,6 +5221,178 @@ func (r userQueryTemplateRelations) Unlink() userSetParam {
 
 func (r userQueryTemplateTemplate) Field() userPrismaFields {
 	return userFieldTemplate
+}
+
+// base struct
+type userQueryActivitiesActivity struct{}
+
+type userQueryActivitiesRelations struct{}
+
+// User -> Activities
+//
+// @relation
+// @required
+func (userQueryActivitiesRelations) Some(
+	params ...ActivityWhereParam,
+) userDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "activities",
+			Fields: []builder.Field{
+				{
+					Name:   "some",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+// User -> Activities
+//
+// @relation
+// @required
+func (userQueryActivitiesRelations) Every(
+	params ...ActivityWhereParam,
+) userDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "activities",
+			Fields: []builder.Field{
+				{
+					Name:   "every",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+// User -> Activities
+//
+// @relation
+// @required
+func (userQueryActivitiesRelations) None(
+	params ...ActivityWhereParam,
+) userDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return userDefaultParam{
+		data: builder.Field{
+			Name: "activities",
+			Fields: []builder.Field{
+				{
+					Name:   "none",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (userQueryActivitiesRelations) Fetch(
+
+	params ...ActivityWhereParam,
+
+) userToActivitiesFindMany {
+	var v userToActivitiesFindMany
+
+	v.query.Operation = "query"
+	v.query.Method = "activities"
+	v.query.Outputs = activityOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r userQueryActivitiesRelations) Link(
+	params ...ActivityWhereParam,
+) userSetParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return userSetParam{
+		data: builder.Field{
+			Name: "activities",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+
+					List:     true,
+					WrapList: true,
+				},
+			},
+		},
+	}
+}
+
+func (r userQueryActivitiesRelations) Unlink(
+	params ...ActivityWhereParam,
+) userSetParam {
+	var v userSetParam
+
+	var fields []builder.Field
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+	v = userSetParam{
+		data: builder.Field{
+			Name: "activities",
+			Fields: []builder.Field{
+				{
+					Name:     "disconnect",
+					List:     true,
+					WrapList: true,
+					Fields:   builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r userQueryActivitiesActivity) Field() userPrismaFields {
+	return userFieldActivities
 }
 
 // Contact acts as a namespaces to access query methods for the Contact model
@@ -9428,6 +10549,1526 @@ func (r templateQueryUserUser) Field() templatePrismaFields {
 	return templateFieldUser
 }
 
+// Activity acts as a namespaces to access query methods for the Activity model
+var Activity = activityQuery{}
+
+// activityQuery exposes query functions for the activity model
+type activityQuery struct {
+
+	// ID
+	//
+	// @required
+	ID activityQueryIDString
+
+	// Description
+	//
+	// @required
+	Description activityQueryDescriptionString
+
+	// CreatedAt
+	//
+	// @required
+	CreatedAt activityQueryCreatedAtDateTime
+
+	// UserID
+	//
+	// @required
+	UserID activityQueryUserIDString
+
+	User activityQueryUserRelations
+}
+
+func (activityQuery) Not(params ...ActivityWhereParam) activityDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:     "NOT",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (activityQuery) Or(params ...ActivityWhereParam) activityDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:     "OR",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+func (activityQuery) And(params ...ActivityWhereParam) activityDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:     "AND",
+			List:     true,
+			WrapList: true,
+			Fields:   fields,
+		},
+	}
+}
+
+// base struct
+type activityQueryIDString struct{}
+
+// Set the required value of ID
+func (r activityQueryIDString) Set(value string) activitySetParam {
+
+	return activitySetParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of ID dynamically
+func (r activityQueryIDString) SetIfPresent(value *String) activitySetParam {
+	if value == nil {
+		return activitySetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r activityQueryIDString) Equals(value string) activityWithPrismaIDEqualsUniqueParam {
+
+	return activityWithPrismaIDEqualsUniqueParam{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) EqualsIfPresent(value *string) activityWithPrismaIDEqualsUniqueParam {
+	if value == nil {
+		return activityWithPrismaIDEqualsUniqueParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r activityQueryIDString) Order(direction SortOrder) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: direction,
+		},
+	}
+}
+
+func (r activityQueryIDString) Cursor(cursor string) activityCursorParam {
+	return activityCursorParam{
+		data: builder.Field{
+			Name:  "id",
+			Value: cursor,
+		},
+	}
+}
+
+func (r activityQueryIDString) In(value []string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) InIfPresent(value []string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.In(value)
+}
+
+func (r activityQueryIDString) NotIn(value []string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) NotInIfPresent(value []string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.NotIn(value)
+}
+
+func (r activityQueryIDString) Lt(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) LtIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Lt(*value)
+}
+
+func (r activityQueryIDString) Lte(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) LteIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Lte(*value)
+}
+
+func (r activityQueryIDString) Gt(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) GtIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Gt(*value)
+}
+
+func (r activityQueryIDString) Gte(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) GteIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Gte(*value)
+}
+
+func (r activityQueryIDString) Contains(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) ContainsIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Contains(*value)
+}
+
+func (r activityQueryIDString) StartsWith(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) StartsWithIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r activityQueryIDString) EndsWith(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) EndsWithIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r activityQueryIDString) Mode(value QueryMode) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) ModeIfPresent(value *QueryMode) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Mode(*value)
+}
+
+func (r activityQueryIDString) Not(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryIDString) NotIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r activityQueryIDString) HasPrefix(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r activityQueryIDString) HasPrefixIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r activityQueryIDString) HasSuffix(value string) activityParamUnique {
+	return activityParamUnique{
+		data: builder.Field{
+			Name: "id",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r activityQueryIDString) HasSuffixIfPresent(value *string) activityParamUnique {
+	if value == nil {
+		return activityParamUnique{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r activityQueryIDString) Field() activityPrismaFields {
+	return activityFieldID
+}
+
+// base struct
+type activityQueryDescriptionString struct{}
+
+// Set the required value of Description
+func (r activityQueryDescriptionString) Set(value string) activityWithPrismaDescriptionSetParam {
+
+	return activityWithPrismaDescriptionSetParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of Description dynamically
+func (r activityQueryDescriptionString) SetIfPresent(value *String) activityWithPrismaDescriptionSetParam {
+	if value == nil {
+		return activityWithPrismaDescriptionSetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r activityQueryDescriptionString) Equals(value string) activityWithPrismaDescriptionEqualsParam {
+
+	return activityWithPrismaDescriptionEqualsParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) EqualsIfPresent(value *string) activityWithPrismaDescriptionEqualsParam {
+	if value == nil {
+		return activityWithPrismaDescriptionEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r activityQueryDescriptionString) Order(direction SortOrder) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: direction,
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) Cursor(cursor string) activityCursorParam {
+	return activityCursorParam{
+		data: builder.Field{
+			Name:  "description",
+			Value: cursor,
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) In(value []string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) InIfPresent(value []string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r activityQueryDescriptionString) NotIn(value []string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) NotInIfPresent(value []string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r activityQueryDescriptionString) Lt(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) LtIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r activityQueryDescriptionString) Lte(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) LteIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r activityQueryDescriptionString) Gt(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) GtIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r activityQueryDescriptionString) Gte(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) GteIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r activityQueryDescriptionString) Contains(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) ContainsIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r activityQueryDescriptionString) StartsWith(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) StartsWithIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r activityQueryDescriptionString) EndsWith(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) EndsWithIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r activityQueryDescriptionString) Mode(value QueryMode) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) ModeIfPresent(value *QueryMode) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r activityQueryDescriptionString) Not(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryDescriptionString) NotIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r activityQueryDescriptionString) HasPrefix(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r activityQueryDescriptionString) HasPrefixIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r activityQueryDescriptionString) HasSuffix(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "description",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r activityQueryDescriptionString) HasSuffixIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r activityQueryDescriptionString) Field() activityPrismaFields {
+	return activityFieldDescription
+}
+
+// base struct
+type activityQueryCreatedAtDateTime struct{}
+
+// Set the required value of CreatedAt
+func (r activityQueryCreatedAtDateTime) Set(value DateTime) activitySetParam {
+
+	return activitySetParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of CreatedAt dynamically
+func (r activityQueryCreatedAtDateTime) SetIfPresent(value *DateTime) activitySetParam {
+	if value == nil {
+		return activitySetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Equals(value DateTime) activityWithPrismaCreatedAtEqualsParam {
+
+	return activityWithPrismaCreatedAtEqualsParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) EqualsIfPresent(value *DateTime) activityWithPrismaCreatedAtEqualsParam {
+	if value == nil {
+		return activityWithPrismaCreatedAtEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Order(direction SortOrder) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: direction,
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) Cursor(cursor DateTime) activityCursorParam {
+	return activityCursorParam{
+		data: builder.Field{
+			Name:  "createdAt",
+			Value: cursor,
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) In(value []DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) InIfPresent(value []DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r activityQueryCreatedAtDateTime) NotIn(value []DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) NotInIfPresent(value []DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r activityQueryCreatedAtDateTime) Lt(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) LtIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Lte(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) LteIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Gt(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) GtIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Gte(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) GteIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Not(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryCreatedAtDateTime) NotIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use Lt instead.
+
+func (r activityQueryCreatedAtDateTime) Before(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LtIfPresent instead.
+func (r activityQueryCreatedAtDateTime) BeforeIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Before(*value)
+}
+
+// deprecated: Use Gt instead.
+
+func (r activityQueryCreatedAtDateTime) After(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GtIfPresent instead.
+func (r activityQueryCreatedAtDateTime) AfterIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.After(*value)
+}
+
+// deprecated: Use Lte instead.
+
+func (r activityQueryCreatedAtDateTime) BeforeEquals(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use LteIfPresent instead.
+func (r activityQueryCreatedAtDateTime) BeforeEqualsIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.BeforeEquals(*value)
+}
+
+// deprecated: Use Gte instead.
+
+func (r activityQueryCreatedAtDateTime) AfterEquals(value DateTime) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "createdAt",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use GteIfPresent instead.
+func (r activityQueryCreatedAtDateTime) AfterEqualsIfPresent(value *DateTime) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.AfterEquals(*value)
+}
+
+func (r activityQueryCreatedAtDateTime) Field() activityPrismaFields {
+	return activityFieldCreatedAt
+}
+
+// base struct
+type activityQueryUserIDString struct{}
+
+// Set the required value of UserID
+func (r activityQueryUserIDString) Set(value string) activitySetParam {
+
+	return activitySetParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: value,
+		},
+	}
+
+}
+
+// Set the optional value of UserID dynamically
+func (r activityQueryUserIDString) SetIfPresent(value *String) activitySetParam {
+	if value == nil {
+		return activitySetParam{}
+	}
+
+	return r.Set(*value)
+}
+
+func (r activityQueryUserIDString) Equals(value string) activityWithPrismaUserIDEqualsParam {
+
+	return activityWithPrismaUserIDEqualsParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "equals",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) EqualsIfPresent(value *string) activityWithPrismaUserIDEqualsParam {
+	if value == nil {
+		return activityWithPrismaUserIDEqualsParam{}
+	}
+	return r.Equals(*value)
+}
+
+func (r activityQueryUserIDString) Order(direction SortOrder) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: direction,
+		},
+	}
+}
+
+func (r activityQueryUserIDString) Cursor(cursor string) activityCursorParam {
+	return activityCursorParam{
+		data: builder.Field{
+			Name:  "userId",
+			Value: cursor,
+		},
+	}
+}
+
+func (r activityQueryUserIDString) In(value []string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "in",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) InIfPresent(value []string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.In(value)
+}
+
+func (r activityQueryUserIDString) NotIn(value []string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "notIn",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) NotInIfPresent(value []string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.NotIn(value)
+}
+
+func (r activityQueryUserIDString) Lt(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) LtIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lt(*value)
+}
+
+func (r activityQueryUserIDString) Lte(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "lte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) LteIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Lte(*value)
+}
+
+func (r activityQueryUserIDString) Gt(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gt",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) GtIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gt(*value)
+}
+
+func (r activityQueryUserIDString) Gte(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "gte",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) GteIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Gte(*value)
+}
+
+func (r activityQueryUserIDString) Contains(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "contains",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) ContainsIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Contains(*value)
+}
+
+func (r activityQueryUserIDString) StartsWith(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "startsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) StartsWithIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.StartsWith(*value)
+}
+
+func (r activityQueryUserIDString) EndsWith(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "endsWith",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) EndsWithIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.EndsWith(*value)
+}
+
+func (r activityQueryUserIDString) Mode(value QueryMode) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "mode",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) ModeIfPresent(value *QueryMode) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Mode(*value)
+}
+
+func (r activityQueryUserIDString) Not(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "not",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserIDString) NotIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.Not(*value)
+}
+
+// deprecated: Use StartsWith instead.
+
+func (r activityQueryUserIDString) HasPrefix(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "starts_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use StartsWithIfPresent instead.
+func (r activityQueryUserIDString) HasPrefixIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.HasPrefix(*value)
+}
+
+// deprecated: Use EndsWith instead.
+
+func (r activityQueryUserIDString) HasSuffix(value string) activityDefaultParam {
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "userId",
+			Fields: []builder.Field{
+				{
+					Name:  "ends_with",
+					Value: value,
+				},
+			},
+		},
+	}
+}
+
+// deprecated: Use EndsWithIfPresent instead.
+func (r activityQueryUserIDString) HasSuffixIfPresent(value *string) activityDefaultParam {
+	if value == nil {
+		return activityDefaultParam{}
+	}
+	return r.HasSuffix(*value)
+}
+
+func (r activityQueryUserIDString) Field() activityPrismaFields {
+	return activityFieldUserID
+}
+
+// base struct
+type activityQueryUserUser struct{}
+
+type activityQueryUserRelations struct{}
+
+// Activity -> User
+//
+// @relation
+// @required
+func (activityQueryUserRelations) Where(
+	params ...UserWhereParam,
+) activityDefaultParam {
+	var fields []builder.Field
+
+	for _, q := range params {
+		fields = append(fields, q.field())
+	}
+
+	return activityDefaultParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:   "is",
+					Fields: fields,
+				},
+			},
+		},
+	}
+}
+
+func (activityQueryUserRelations) Fetch() activityToUserFindUnique {
+	var v activityToUserFindUnique
+
+	v.query.Operation = "query"
+	v.query.Method = "user"
+	v.query.Outputs = userOutput
+
+	return v
+}
+
+func (r activityQueryUserRelations) Link(
+	params UserWhereParam,
+) activityWithPrismaUserSetParam {
+	var fields []builder.Field
+
+	f := params.field()
+	if f.Fields == nil && f.Value == nil {
+		return activityWithPrismaUserSetParam{}
+	}
+
+	fields = append(fields, f)
+
+	return activityWithPrismaUserSetParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:   "connect",
+					Fields: builder.TransformEquals(fields),
+				},
+			},
+		},
+	}
+}
+
+func (r activityQueryUserRelations) Unlink() activityWithPrismaUserSetParam {
+	var v activityWithPrismaUserSetParam
+
+	v = activityWithPrismaUserSetParam{
+		data: builder.Field{
+			Name: "user",
+			Fields: []builder.Field{
+				{
+					Name:  "disconnect",
+					Value: true,
+				},
+			},
+		},
+	}
+
+	return v
+}
+
+func (r activityQueryUserUser) Field() activityPrismaFields {
+	return activityFieldUser
+}
+
 // --- template actions.gotpl ---
 var countOutput = []builder.Output{
 	{Name: "count"},
@@ -9446,6 +12087,8 @@ var userOutput = []builder.Output{
 	{Name: "professionalEmail"},
 	{Name: "mailAppPassword"},
 	{Name: "dailyLimit"},
+	{Name: "pdfUploadCount"},
+	{Name: "emailsSent"},
 	{Name: "createdAt"},
 	{Name: "updatedAt"},
 }
@@ -10160,6 +12803,162 @@ func (p userWithPrismaDailyLimitEqualsUniqueParam) dailyLimitField() {}
 func (userWithPrismaDailyLimitEqualsUniqueParam) unique() {}
 func (userWithPrismaDailyLimitEqualsUniqueParam) equals() {}
 
+type UserWithPrismaPdfUploadCountEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	pdfUploadCountField()
+}
+
+type UserWithPrismaPdfUploadCountSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	pdfUploadCountField()
+}
+
+type userWithPrismaPdfUploadCountSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaPdfUploadCountSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaPdfUploadCountSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaPdfUploadCountSetParam) userModel() {}
+
+func (p userWithPrismaPdfUploadCountSetParam) pdfUploadCountField() {}
+
+type UserWithPrismaPdfUploadCountWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	pdfUploadCountField()
+}
+
+type userWithPrismaPdfUploadCountEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaPdfUploadCountEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaPdfUploadCountEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaPdfUploadCountEqualsParam) userModel() {}
+
+func (p userWithPrismaPdfUploadCountEqualsParam) pdfUploadCountField() {}
+
+func (userWithPrismaPdfUploadCountSetParam) settable()  {}
+func (userWithPrismaPdfUploadCountEqualsParam) equals() {}
+
+type userWithPrismaPdfUploadCountEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaPdfUploadCountEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaPdfUploadCountEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaPdfUploadCountEqualsUniqueParam) userModel()           {}
+func (p userWithPrismaPdfUploadCountEqualsUniqueParam) pdfUploadCountField() {}
+
+func (userWithPrismaPdfUploadCountEqualsUniqueParam) unique() {}
+func (userWithPrismaPdfUploadCountEqualsUniqueParam) equals() {}
+
+type UserWithPrismaEmailsSentEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	emailsSentField()
+}
+
+type UserWithPrismaEmailsSentSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	emailsSentField()
+}
+
+type userWithPrismaEmailsSentSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaEmailsSentSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaEmailsSentSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaEmailsSentSetParam) userModel() {}
+
+func (p userWithPrismaEmailsSentSetParam) emailsSentField() {}
+
+type UserWithPrismaEmailsSentWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	emailsSentField()
+}
+
+type userWithPrismaEmailsSentEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaEmailsSentEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaEmailsSentEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaEmailsSentEqualsParam) userModel() {}
+
+func (p userWithPrismaEmailsSentEqualsParam) emailsSentField() {}
+
+func (userWithPrismaEmailsSentSetParam) settable()  {}
+func (userWithPrismaEmailsSentEqualsParam) equals() {}
+
+type userWithPrismaEmailsSentEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaEmailsSentEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaEmailsSentEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaEmailsSentEqualsUniqueParam) userModel()       {}
+func (p userWithPrismaEmailsSentEqualsUniqueParam) emailsSentField() {}
+
+func (userWithPrismaEmailsSentEqualsUniqueParam) unique() {}
+func (userWithPrismaEmailsSentEqualsUniqueParam) equals() {}
+
 type UserWithPrismaCreatedAtEqualsSetParam interface {
 	field() builder.Field
 	getQuery() builder.Query
@@ -10471,6 +13270,84 @@ func (p userWithPrismaTemplateEqualsUniqueParam) templateField() {}
 
 func (userWithPrismaTemplateEqualsUniqueParam) unique() {}
 func (userWithPrismaTemplateEqualsUniqueParam) equals() {}
+
+type UserWithPrismaActivitiesEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	userModel()
+	activitiesField()
+}
+
+type UserWithPrismaActivitiesSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	activitiesField()
+}
+
+type userWithPrismaActivitiesSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaActivitiesSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaActivitiesSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaActivitiesSetParam) userModel() {}
+
+func (p userWithPrismaActivitiesSetParam) activitiesField() {}
+
+type UserWithPrismaActivitiesWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	userModel()
+	activitiesField()
+}
+
+type userWithPrismaActivitiesEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaActivitiesEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaActivitiesEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaActivitiesEqualsParam) userModel() {}
+
+func (p userWithPrismaActivitiesEqualsParam) activitiesField() {}
+
+func (userWithPrismaActivitiesSetParam) settable()  {}
+func (userWithPrismaActivitiesEqualsParam) equals() {}
+
+type userWithPrismaActivitiesEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p userWithPrismaActivitiesEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p userWithPrismaActivitiesEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p userWithPrismaActivitiesEqualsUniqueParam) userModel()       {}
+func (p userWithPrismaActivitiesEqualsUniqueParam) activitiesField() {}
+
+func (userWithPrismaActivitiesEqualsUniqueParam) unique() {}
+func (userWithPrismaActivitiesEqualsUniqueParam) equals() {}
 
 type contactActions struct {
 	// client holds the prisma client
@@ -12157,6 +15034,572 @@ func (p templateWithPrismaUserEqualsUniqueParam) userField()     {}
 func (templateWithPrismaUserEqualsUniqueParam) unique() {}
 func (templateWithPrismaUserEqualsUniqueParam) equals() {}
 
+type activityActions struct {
+	// client holds the prisma client
+	client *PrismaClient
+}
+
+var activityOutput = []builder.Output{
+	{Name: "id"},
+	{Name: "description"},
+	{Name: "createdAt"},
+	{Name: "userId"},
+}
+
+type ActivityRelationWith interface {
+	getQuery() builder.Query
+	with()
+	activityRelation()
+}
+
+type ActivityWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+}
+
+type activityDefaultParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityDefaultParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityDefaultParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityDefaultParam) activityModel() {}
+
+type ActivityOrderByParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+}
+
+type activityOrderByParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityOrderByParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityOrderByParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityOrderByParam) activityModel() {}
+
+type ActivityCursorParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	isCursor()
+}
+
+type activityCursorParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityCursorParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityCursorParam) isCursor() {}
+
+func (p activityCursorParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityCursorParam) activityModel() {}
+
+type ActivityParamUnique interface {
+	field() builder.Field
+	getQuery() builder.Query
+	unique()
+	activityModel()
+}
+
+type activityParamUnique struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityParamUnique) activityModel() {}
+
+func (activityParamUnique) unique() {}
+
+func (p activityParamUnique) field() builder.Field {
+	return p.data
+}
+
+func (p activityParamUnique) getQuery() builder.Query {
+	return p.query
+}
+
+type ActivityEqualsWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+}
+
+type activityEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityEqualsParam) activityModel() {}
+
+func (activityEqualsParam) equals() {}
+
+func (p activityEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+type ActivityEqualsUniqueWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	unique()
+	activityModel()
+}
+
+type activityEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityEqualsUniqueParam) activityModel() {}
+
+func (activityEqualsUniqueParam) unique() {}
+func (activityEqualsUniqueParam) equals() {}
+
+func (p activityEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+type ActivitySetParam interface {
+	field() builder.Field
+	settable()
+	activityModel()
+}
+
+type activitySetParam struct {
+	data builder.Field
+}
+
+func (activitySetParam) settable() {}
+
+func (p activitySetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activitySetParam) activityModel() {}
+
+type ActivityWithPrismaIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+	idField()
+}
+
+type ActivityWithPrismaIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	idField()
+}
+
+type activityWithPrismaIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaIDSetParam) activityModel() {}
+
+func (p activityWithPrismaIDSetParam) idField() {}
+
+type ActivityWithPrismaIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	idField()
+}
+
+type activityWithPrismaIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaIDEqualsParam) activityModel() {}
+
+func (p activityWithPrismaIDEqualsParam) idField() {}
+
+func (activityWithPrismaIDSetParam) settable()  {}
+func (activityWithPrismaIDEqualsParam) equals() {}
+
+type activityWithPrismaIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaIDEqualsUniqueParam) activityModel() {}
+func (p activityWithPrismaIDEqualsUniqueParam) idField()       {}
+
+func (activityWithPrismaIDEqualsUniqueParam) unique() {}
+func (activityWithPrismaIDEqualsUniqueParam) equals() {}
+
+type ActivityWithPrismaDescriptionEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+	descriptionField()
+}
+
+type ActivityWithPrismaDescriptionSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	descriptionField()
+}
+
+type activityWithPrismaDescriptionSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaDescriptionSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaDescriptionSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaDescriptionSetParam) activityModel() {}
+
+func (p activityWithPrismaDescriptionSetParam) descriptionField() {}
+
+type ActivityWithPrismaDescriptionWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	descriptionField()
+}
+
+type activityWithPrismaDescriptionEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaDescriptionEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaDescriptionEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaDescriptionEqualsParam) activityModel() {}
+
+func (p activityWithPrismaDescriptionEqualsParam) descriptionField() {}
+
+func (activityWithPrismaDescriptionSetParam) settable()  {}
+func (activityWithPrismaDescriptionEqualsParam) equals() {}
+
+type activityWithPrismaDescriptionEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaDescriptionEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaDescriptionEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaDescriptionEqualsUniqueParam) activityModel()    {}
+func (p activityWithPrismaDescriptionEqualsUniqueParam) descriptionField() {}
+
+func (activityWithPrismaDescriptionEqualsUniqueParam) unique() {}
+func (activityWithPrismaDescriptionEqualsUniqueParam) equals() {}
+
+type ActivityWithPrismaCreatedAtEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+	createdAtField()
+}
+
+type ActivityWithPrismaCreatedAtSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	createdAtField()
+}
+
+type activityWithPrismaCreatedAtSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaCreatedAtSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaCreatedAtSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaCreatedAtSetParam) activityModel() {}
+
+func (p activityWithPrismaCreatedAtSetParam) createdAtField() {}
+
+type ActivityWithPrismaCreatedAtWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	createdAtField()
+}
+
+type activityWithPrismaCreatedAtEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaCreatedAtEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaCreatedAtEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaCreatedAtEqualsParam) activityModel() {}
+
+func (p activityWithPrismaCreatedAtEqualsParam) createdAtField() {}
+
+func (activityWithPrismaCreatedAtSetParam) settable()  {}
+func (activityWithPrismaCreatedAtEqualsParam) equals() {}
+
+type activityWithPrismaCreatedAtEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaCreatedAtEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaCreatedAtEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaCreatedAtEqualsUniqueParam) activityModel()  {}
+func (p activityWithPrismaCreatedAtEqualsUniqueParam) createdAtField() {}
+
+func (activityWithPrismaCreatedAtEqualsUniqueParam) unique() {}
+func (activityWithPrismaCreatedAtEqualsUniqueParam) equals() {}
+
+type ActivityWithPrismaUserIDEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+	userIDField()
+}
+
+type ActivityWithPrismaUserIDSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	userIDField()
+}
+
+type activityWithPrismaUserIDSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserIDSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserIDSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserIDSetParam) activityModel() {}
+
+func (p activityWithPrismaUserIDSetParam) userIDField() {}
+
+type ActivityWithPrismaUserIDWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	userIDField()
+}
+
+type activityWithPrismaUserIDEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserIDEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserIDEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserIDEqualsParam) activityModel() {}
+
+func (p activityWithPrismaUserIDEqualsParam) userIDField() {}
+
+func (activityWithPrismaUserIDSetParam) settable()  {}
+func (activityWithPrismaUserIDEqualsParam) equals() {}
+
+type activityWithPrismaUserIDEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserIDEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserIDEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserIDEqualsUniqueParam) activityModel() {}
+func (p activityWithPrismaUserIDEqualsUniqueParam) userIDField()   {}
+
+func (activityWithPrismaUserIDEqualsUniqueParam) unique() {}
+func (activityWithPrismaUserIDEqualsUniqueParam) equals() {}
+
+type ActivityWithPrismaUserEqualsSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	equals()
+	activityModel()
+	userField()
+}
+
+type ActivityWithPrismaUserSetParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	userField()
+}
+
+type activityWithPrismaUserSetParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserSetParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserSetParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserSetParam) activityModel() {}
+
+func (p activityWithPrismaUserSetParam) userField() {}
+
+type ActivityWithPrismaUserWhereParam interface {
+	field() builder.Field
+	getQuery() builder.Query
+	activityModel()
+	userField()
+}
+
+type activityWithPrismaUserEqualsParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserEqualsParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserEqualsParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserEqualsParam) activityModel() {}
+
+func (p activityWithPrismaUserEqualsParam) userField() {}
+
+func (activityWithPrismaUserSetParam) settable()  {}
+func (activityWithPrismaUserEqualsParam) equals() {}
+
+type activityWithPrismaUserEqualsUniqueParam struct {
+	data  builder.Field
+	query builder.Query
+}
+
+func (p activityWithPrismaUserEqualsUniqueParam) field() builder.Field {
+	return p.data
+}
+
+func (p activityWithPrismaUserEqualsUniqueParam) getQuery() builder.Query {
+	return p.query
+}
+
+func (p activityWithPrismaUserEqualsUniqueParam) activityModel() {}
+func (p activityWithPrismaUserEqualsUniqueParam) userField()     {}
+
+func (activityWithPrismaUserEqualsUniqueParam) unique() {}
+func (activityWithPrismaUserEqualsUniqueParam) equals() {}
+
 // --- template create.gotpl ---
 
 // Creates a single user.
@@ -12374,6 +15817,76 @@ func (r templateCreateOne) Exec(ctx context.Context) (*TemplateModel, error) {
 
 func (r templateCreateOne) Tx() TemplateUniqueTxResult {
 	v := newTemplateUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+// Creates a single activity.
+func (r activityActions) CreateOne(
+	_description ActivityWithPrismaDescriptionSetParam,
+	_user ActivityWithPrismaUserSetParam,
+
+	optional ...ActivitySetParam,
+) activityCreateOne {
+	var v activityCreateOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "createOne"
+	v.query.Model = "Activity"
+	v.query.Outputs = activityOutput
+
+	var fields []builder.Field
+
+	fields = append(fields, _description.field())
+	fields = append(fields, _user.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+func (r activityCreateOne) With(params ...ActivityRelationWith) activityCreateOne {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+type activityCreateOne struct {
+	query builder.Query
+}
+
+func (p activityCreateOne) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p activityCreateOne) activityModel() {}
+
+func (r activityCreateOne) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityCreateOne) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
 	return v
@@ -13483,6 +16996,560 @@ func (r userToTemplateDeleteMany) Exec(ctx context.Context) (*BatchResult, error
 }
 
 func (r userToTemplateDeleteMany) Tx() UserManyTxResult {
+	v := newUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type userToActivitiesFindUnique struct {
+	query builder.Query
+}
+
+func (r userToActivitiesFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindUnique) with()         {}
+func (r userToActivitiesFindUnique) userModel()    {}
+func (r userToActivitiesFindUnique) userRelation() {}
+
+func (r userToActivitiesFindUnique) With(params ...ActivityRelationWith) userToActivitiesFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToActivitiesFindUnique) Select(params ...userPrismaFields) userToActivitiesFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindUnique) Omit(params ...userPrismaFields) userToActivitiesFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindUnique) Exec(ctx context.Context) (
+	*UserModel,
+	error,
+) {
+	var v *UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToActivitiesFindUnique) ExecInner(ctx context.Context) (
+	*InnerUser,
+	error,
+) {
+	var v *InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToActivitiesFindUnique) Update(params ...UserSetParam) userToActivitiesUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "User"
+
+	var v userToActivitiesUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type userToActivitiesUpdateUnique struct {
+	query builder.Query
+}
+
+func (r userToActivitiesUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesUpdateUnique) userModel() {}
+
+func (r userToActivitiesUpdateUnique) Exec(ctx context.Context) (*UserModel, error) {
+	var v UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToActivitiesUpdateUnique) Tx() UserUniqueTxResult {
+	v := newUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r userToActivitiesFindUnique) Delete() userToActivitiesDeleteUnique {
+	var v userToActivitiesDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "User"
+
+	return v
+}
+
+type userToActivitiesDeleteUnique struct {
+	query builder.Query
+}
+
+func (r userToActivitiesDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p userToActivitiesDeleteUnique) userModel() {}
+
+func (r userToActivitiesDeleteUnique) Exec(ctx context.Context) (*UserModel, error) {
+	var v UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToActivitiesDeleteUnique) Tx() UserUniqueTxResult {
+	v := newUserUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type userToActivitiesFindFirst struct {
+	query builder.Query
+}
+
+func (r userToActivitiesFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindFirst) with()         {}
+func (r userToActivitiesFindFirst) userModel()    {}
+func (r userToActivitiesFindFirst) userRelation() {}
+
+func (r userToActivitiesFindFirst) With(params ...ActivityRelationWith) userToActivitiesFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToActivitiesFindFirst) Select(params ...userPrismaFields) userToActivitiesFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindFirst) Omit(params ...userPrismaFields) userToActivitiesFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindFirst) OrderBy(params ...ActivityOrderByParam) userToActivitiesFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r userToActivitiesFindFirst) Skip(count int) userToActivitiesFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToActivitiesFindFirst) Take(count int) userToActivitiesFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToActivitiesFindFirst) Cursor(cursor UserCursorParam) userToActivitiesFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r userToActivitiesFindFirst) Exec(ctx context.Context) (
+	*UserModel,
+	error,
+) {
+	var v *UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r userToActivitiesFindFirst) ExecInner(ctx context.Context) (
+	*InnerUser,
+	error,
+) {
+	var v *InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type userToActivitiesFindMany struct {
+	query builder.Query
+}
+
+func (r userToActivitiesFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesFindMany) with()         {}
+func (r userToActivitiesFindMany) userModel()    {}
+func (r userToActivitiesFindMany) userRelation() {}
+
+func (r userToActivitiesFindMany) With(params ...ActivityRelationWith) userToActivitiesFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r userToActivitiesFindMany) Select(params ...userPrismaFields) userToActivitiesFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindMany) Omit(params ...userPrismaFields) userToActivitiesFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range userOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r userToActivitiesFindMany) OrderBy(params ...ActivityOrderByParam) userToActivitiesFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r userToActivitiesFindMany) Skip(count int) userToActivitiesFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToActivitiesFindMany) Take(count int) userToActivitiesFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r userToActivitiesFindMany) Cursor(cursor UserCursorParam) userToActivitiesFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r userToActivitiesFindMany) Exec(ctx context.Context) (
+	[]UserModel,
+	error,
+) {
+	var v []UserModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r userToActivitiesFindMany) ExecInner(ctx context.Context) (
+	[]InnerUser,
+	error,
+) {
+	var v []InnerUser
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r userToActivitiesFindMany) Update(params ...UserSetParam) userToActivitiesUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "User"
+
+	r.query.Outputs = countOutput
+
+	var v userToActivitiesUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type userToActivitiesUpdateMany struct {
+	query builder.Query
+}
+
+func (r userToActivitiesUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r userToActivitiesUpdateMany) userModel() {}
+
+func (r userToActivitiesUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToActivitiesUpdateMany) Tx() UserManyTxResult {
+	v := newUserManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r userToActivitiesFindMany) Delete() userToActivitiesDeleteMany {
+	var v userToActivitiesDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "User"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type userToActivitiesDeleteMany struct {
+	query builder.Query
+}
+
+func (r userToActivitiesDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p userToActivitiesDeleteMany) userModel() {}
+
+func (r userToActivitiesDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r userToActivitiesDeleteMany) Tx() UserManyTxResult {
 	v := newUserManyTxResult()
 	v.query = r.query
 	v.query.TxResult = make(chan []byte, 1)
@@ -16547,6 +20614,1210 @@ func (r templateDeleteMany) Tx() TemplateManyTxResult {
 	return v
 }
 
+type activityToUserFindUnique struct {
+	query builder.Query
+}
+
+func (r activityToUserFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindUnique) with()             {}
+func (r activityToUserFindUnique) activityModel()    {}
+func (r activityToUserFindUnique) activityRelation() {}
+
+func (r activityToUserFindUnique) With(params ...UserRelationWith) activityToUserFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityToUserFindUnique) Select(params ...activityPrismaFields) activityToUserFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindUnique) Omit(params ...activityPrismaFields) activityToUserFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindUnique) Exec(ctx context.Context) (
+	*ActivityModel,
+	error,
+) {
+	var v *ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityToUserFindUnique) ExecInner(ctx context.Context) (
+	*InnerActivity,
+	error,
+) {
+	var v *InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityToUserFindUnique) Update(params ...ActivitySetParam) activityToUserUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Activity"
+
+	var v activityToUserUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type activityToUserUpdateUnique struct {
+	query builder.Query
+}
+
+func (r activityToUserUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserUpdateUnique) activityModel() {}
+
+func (r activityToUserUpdateUnique) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityToUserUpdateUnique) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r activityToUserFindUnique) Delete() activityToUserDeleteUnique {
+	var v activityToUserDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Activity"
+
+	return v
+}
+
+type activityToUserDeleteUnique struct {
+	query builder.Query
+}
+
+func (r activityToUserDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p activityToUserDeleteUnique) activityModel() {}
+
+func (r activityToUserDeleteUnique) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityToUserDeleteUnique) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type activityToUserFindFirst struct {
+	query builder.Query
+}
+
+func (r activityToUserFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindFirst) with()             {}
+func (r activityToUserFindFirst) activityModel()    {}
+func (r activityToUserFindFirst) activityRelation() {}
+
+func (r activityToUserFindFirst) With(params ...UserRelationWith) activityToUserFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityToUserFindFirst) Select(params ...activityPrismaFields) activityToUserFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindFirst) Omit(params ...activityPrismaFields) activityToUserFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindFirst) OrderBy(params ...UserOrderByParam) activityToUserFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r activityToUserFindFirst) Skip(count int) activityToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityToUserFindFirst) Take(count int) activityToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityToUserFindFirst) Cursor(cursor ActivityCursorParam) activityToUserFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r activityToUserFindFirst) Exec(ctx context.Context) (
+	*ActivityModel,
+	error,
+) {
+	var v *ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityToUserFindFirst) ExecInner(ctx context.Context) (
+	*InnerActivity,
+	error,
+) {
+	var v *InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type activityToUserFindMany struct {
+	query builder.Query
+}
+
+func (r activityToUserFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserFindMany) with()             {}
+func (r activityToUserFindMany) activityModel()    {}
+func (r activityToUserFindMany) activityRelation() {}
+
+func (r activityToUserFindMany) With(params ...UserRelationWith) activityToUserFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityToUserFindMany) Select(params ...activityPrismaFields) activityToUserFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindMany) Omit(params ...activityPrismaFields) activityToUserFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityToUserFindMany) OrderBy(params ...UserOrderByParam) activityToUserFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r activityToUserFindMany) Skip(count int) activityToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityToUserFindMany) Take(count int) activityToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityToUserFindMany) Cursor(cursor ActivityCursorParam) activityToUserFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r activityToUserFindMany) Exec(ctx context.Context) (
+	[]ActivityModel,
+	error,
+) {
+	var v []ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r activityToUserFindMany) ExecInner(ctx context.Context) (
+	[]InnerActivity,
+	error,
+) {
+	var v []InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r activityToUserFindMany) Update(params ...ActivitySetParam) activityToUserUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Activity"
+
+	r.query.Outputs = countOutput
+
+	var v activityToUserUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type activityToUserUpdateMany struct {
+	query builder.Query
+}
+
+func (r activityToUserUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityToUserUpdateMany) activityModel() {}
+
+func (r activityToUserUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityToUserUpdateMany) Tx() ActivityManyTxResult {
+	v := newActivityManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r activityToUserFindMany) Delete() activityToUserDeleteMany {
+	var v activityToUserDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Activity"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type activityToUserDeleteMany struct {
+	query builder.Query
+}
+
+func (r activityToUserDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p activityToUserDeleteMany) activityModel() {}
+
+func (r activityToUserDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityToUserDeleteMany) Tx() ActivityManyTxResult {
+	v := newActivityManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type activityFindUnique struct {
+	query builder.Query
+}
+
+func (r activityFindUnique) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindUnique) with()             {}
+func (r activityFindUnique) activityModel()    {}
+func (r activityFindUnique) activityRelation() {}
+
+func (r activityActions) FindUnique(
+	params ActivityEqualsUniqueWhereParam,
+) activityFindUnique {
+	var v activityFindUnique
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findUnique"
+
+	v.query.Model = "Activity"
+	v.query.Outputs = activityOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r activityFindUnique) With(params ...ActivityRelationWith) activityFindUnique {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityFindUnique) Select(params ...activityPrismaFields) activityFindUnique {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindUnique) Omit(params ...activityPrismaFields) activityFindUnique {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindUnique) Exec(ctx context.Context) (
+	*ActivityModel,
+	error,
+) {
+	var v *ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityFindUnique) ExecInner(ctx context.Context) (
+	*InnerActivity,
+	error,
+) {
+	var v *InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityFindUnique) Update(params ...ActivitySetParam) activityUpdateUnique {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateOne"
+	r.query.Model = "Activity"
+
+	var v activityUpdateUnique
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type activityUpdateUnique struct {
+	query builder.Query
+}
+
+func (r activityUpdateUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityUpdateUnique) activityModel() {}
+
+func (r activityUpdateUnique) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityUpdateUnique) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r activityFindUnique) Delete() activityDeleteUnique {
+	var v activityDeleteUnique
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteOne"
+	v.query.Model = "Activity"
+
+	return v
+}
+
+type activityDeleteUnique struct {
+	query builder.Query
+}
+
+func (r activityDeleteUnique) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p activityDeleteUnique) activityModel() {}
+
+func (r activityDeleteUnique) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityDeleteUnique) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+type activityFindFirst struct {
+	query builder.Query
+}
+
+func (r activityFindFirst) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindFirst) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindFirst) with()             {}
+func (r activityFindFirst) activityModel()    {}
+func (r activityFindFirst) activityRelation() {}
+
+func (r activityActions) FindFirst(
+	params ...ActivityWhereParam,
+) activityFindFirst {
+	var v activityFindFirst
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findFirst"
+
+	v.query.Model = "Activity"
+	v.query.Outputs = activityOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r activityFindFirst) With(params ...ActivityRelationWith) activityFindFirst {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityFindFirst) Select(params ...activityPrismaFields) activityFindFirst {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindFirst) Omit(params ...activityPrismaFields) activityFindFirst {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindFirst) OrderBy(params ...ActivityOrderByParam) activityFindFirst {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r activityFindFirst) Skip(count int) activityFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityFindFirst) Take(count int) activityFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityFindFirst) Cursor(cursor ActivityCursorParam) activityFindFirst {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r activityFindFirst) Exec(ctx context.Context) (
+	*ActivityModel,
+	error,
+) {
+	var v *ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+func (r activityFindFirst) ExecInner(ctx context.Context) (
+	*InnerActivity,
+	error,
+) {
+	var v *InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, ErrNotFound
+	}
+
+	return v, nil
+}
+
+type activityFindMany struct {
+	query builder.Query
+}
+
+func (r activityFindMany) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityFindMany) with()             {}
+func (r activityFindMany) activityModel()    {}
+func (r activityFindMany) activityRelation() {}
+
+func (r activityActions) FindMany(
+	params ...ActivityWhereParam,
+) activityFindMany {
+	var v activityFindMany
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "query"
+
+	v.query.Method = "findMany"
+
+	v.query.Model = "Activity"
+	v.query.Outputs = activityOutput
+
+	var where []builder.Field
+	for _, q := range params {
+		if query := q.getQuery(); query.Operation != "" {
+			v.query.Outputs = append(v.query.Outputs, builder.Output{
+				Name:    query.Method,
+				Inputs:  query.Inputs,
+				Outputs: query.Outputs,
+			})
+		} else {
+			where = append(where, q.field())
+		}
+	}
+
+	if len(where) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:   "where",
+			Fields: where,
+		})
+	}
+
+	return v
+}
+
+func (r activityFindMany) With(params ...ActivityRelationWith) activityFindMany {
+	for _, q := range params {
+		query := q.getQuery()
+		r.query.Outputs = append(r.query.Outputs, builder.Output{
+			Name:    query.Method,
+			Inputs:  query.Inputs,
+			Outputs: query.Outputs,
+		})
+	}
+
+	return r
+}
+
+func (r activityFindMany) Select(params ...activityPrismaFields) activityFindMany {
+	var outputs []builder.Output
+
+	for _, param := range params {
+		outputs = append(outputs, builder.Output{
+			Name: string(param),
+		})
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindMany) Omit(params ...activityPrismaFields) activityFindMany {
+	var outputs []builder.Output
+
+	var raw []string
+	for _, param := range params {
+		raw = append(raw, string(param))
+	}
+
+	for _, output := range activityOutput {
+		if !slices.Contains(raw, output.Name) {
+			outputs = append(outputs, output)
+		}
+	}
+
+	r.query.Outputs = outputs
+
+	return r
+}
+
+func (r activityFindMany) OrderBy(params ...ActivityOrderByParam) activityFindMany {
+	var fields []builder.Field
+
+	for _, param := range params {
+		fields = append(fields, builder.Field{
+			Name:   param.field().Name,
+			Value:  param.field().Value,
+			Fields: param.field().Fields,
+		})
+	}
+
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:     "orderBy",
+		Fields:   fields,
+		WrapList: true,
+	})
+
+	return r
+}
+
+func (r activityFindMany) Skip(count int) activityFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "skip",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityFindMany) Take(count int) activityFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:  "take",
+		Value: count,
+	})
+	return r
+}
+
+func (r activityFindMany) Cursor(cursor ActivityCursorParam) activityFindMany {
+	r.query.Inputs = append(r.query.Inputs, builder.Input{
+		Name:   "cursor",
+		Fields: []builder.Field{cursor.field()},
+	})
+	return r
+}
+
+func (r activityFindMany) Exec(ctx context.Context) (
+	[]ActivityModel,
+	error,
+) {
+	var v []ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r activityFindMany) ExecInner(ctx context.Context) (
+	[]InnerActivity,
+	error,
+) {
+	var v []InnerActivity
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func (r activityFindMany) Update(params ...ActivitySetParam) activityUpdateMany {
+	r.query.Operation = "mutation"
+	r.query.Method = "updateMany"
+	r.query.Model = "Activity"
+
+	r.query.Outputs = countOutput
+
+	var v activityUpdateMany
+	v.query = r.query
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "data",
+		Fields: fields,
+	})
+	return v
+}
+
+type activityUpdateMany struct {
+	query builder.Query
+}
+
+func (r activityUpdateMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityUpdateMany) activityModel() {}
+
+func (r activityUpdateMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityUpdateMany) Tx() ActivityManyTxResult {
+	v := newActivityManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
+func (r activityFindMany) Delete() activityDeleteMany {
+	var v activityDeleteMany
+	v.query = r.query
+	v.query.Operation = "mutation"
+	v.query.Method = "deleteMany"
+	v.query.Model = "Activity"
+
+	v.query.Outputs = countOutput
+
+	return v
+}
+
+type activityDeleteMany struct {
+	query builder.Query
+}
+
+func (r activityDeleteMany) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (p activityDeleteMany) activityModel() {}
+
+func (r activityDeleteMany) Exec(ctx context.Context) (*BatchResult, error) {
+	var v BatchResult
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityDeleteMany) Tx() ActivityManyTxResult {
+	v := newActivityManyTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template transaction.gotpl ---
 
 func newUserUniqueTxResult() UserUniqueTxResult {
@@ -16687,6 +21958,54 @@ func (p TemplateManyTxResult) ExtractQuery() builder.Query {
 func (p TemplateManyTxResult) IsTx() {}
 
 func (r TemplateManyTxResult) Result() (v *BatchResult) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newActivityUniqueTxResult() ActivityUniqueTxResult {
+	return ActivityUniqueTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type ActivityUniqueTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p ActivityUniqueTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p ActivityUniqueTxResult) IsTx() {}
+
+func (r ActivityUniqueTxResult) Result() (v *ActivityModel) {
+	if err := r.result.Get(r.query.TxResult, &v); err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func newActivityManyTxResult() ActivityManyTxResult {
+	return ActivityManyTxResult{
+		result: &transaction.Result{},
+	}
+}
+
+type ActivityManyTxResult struct {
+	query  builder.Query
+	result *transaction.Result
+}
+
+func (p ActivityManyTxResult) ExtractQuery() builder.Query {
+	return p.query
+}
+
+func (p ActivityManyTxResult) IsTx() {}
+
+func (r ActivityManyTxResult) Result() (v *BatchResult) {
 	if err := r.result.Get(r.query.TxResult, &v); err != nil {
 		panic(err)
 	}
@@ -17144,6 +22463,149 @@ func (r templateUpsertOne) Tx() TemplateUniqueTxResult {
 	return v
 }
 
+type activityUpsertOne struct {
+	query builder.Query
+}
+
+func (r activityUpsertOne) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityUpsertOne) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityUpsertOne) with()             {}
+func (r activityUpsertOne) activityModel()    {}
+func (r activityUpsertOne) activityRelation() {}
+
+func (r activityActions) UpsertOne(
+	params ActivityEqualsUniqueWhereParam,
+) activityUpsertOne {
+	var v activityUpsertOne
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+
+	v.query.Operation = "mutation"
+	v.query.Method = "upsertOne"
+	v.query.Model = "Activity"
+	v.query.Outputs = activityOutput
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "where",
+		Fields: builder.TransformEquals([]builder.Field{params.field()}),
+	})
+
+	return v
+}
+
+func (r activityUpsertOne) Create(
+
+	_description ActivityWithPrismaDescriptionSetParam,
+	_user ActivityWithPrismaUserSetParam,
+
+	optional ...ActivitySetParam,
+) activityUpsertOne {
+	var v activityUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _description.field())
+	fields = append(fields, _user.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r activityUpsertOne) Update(
+	params ...ActivitySetParam,
+) activityUpsertOne {
+	var v activityUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	for _, q := range params {
+
+		field := q.field()
+
+		_, isJson := field.Value.(types.JSON)
+		if field.Value != nil && !isJson {
+			v := field.Value
+			field.Fields = []builder.Field{
+				{
+					Name:  "set",
+					Value: v,
+				},
+			}
+
+			field.Value = nil
+		}
+
+		fields = append(fields, field)
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r activityUpsertOne) CreateOrUpdate(
+
+	_description ActivityWithPrismaDescriptionSetParam,
+	_user ActivityWithPrismaUserSetParam,
+
+	optional ...ActivitySetParam,
+) activityUpsertOne {
+	var v activityUpsertOne
+	v.query = r.query
+
+	var fields []builder.Field
+	fields = append(fields, _description.field())
+	fields = append(fields, _user.field())
+
+	for _, q := range optional {
+		fields = append(fields, q.field())
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "create",
+		Fields: fields,
+	})
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:   "update",
+		Fields: fields,
+	})
+
+	return v
+}
+
+func (r activityUpsertOne) Exec(ctx context.Context) (*ActivityModel, error) {
+	var v ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r activityUpsertOne) Tx() ActivityUniqueTxResult {
+	v := newActivityUniqueTxResult()
+	v.query = r.query
+	v.query.TxResult = make(chan []byte, 1)
+	return v
+}
+
 // --- template raw.gotpl ---
 
 type userAggregateRaw struct {
@@ -17383,6 +22845,87 @@ func (r templateAggregateRaw) Exec(ctx context.Context) ([]TemplateModel, error)
 
 func (r templateAggregateRaw) ExecInner(ctx context.Context) ([]InnerTemplate, error) {
 	var v []InnerTemplate
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+type activityAggregateRaw struct {
+	query builder.Query
+}
+
+func (r activityAggregateRaw) getQuery() builder.Query {
+	return r.query
+}
+
+func (r activityAggregateRaw) ExtractQuery() builder.Query {
+	return r.query
+}
+
+func (r activityAggregateRaw) with()             {}
+func (r activityAggregateRaw) activityModel()    {}
+func (r activityAggregateRaw) activityRelation() {}
+
+func (r activityActions) FindRaw(filter interface{}, options ...interface{}) activityAggregateRaw {
+	var v activityAggregateRaw
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+	v.query.Method = "findRaw"
+	v.query.Operation = "query"
+	v.query.Model = "Activity"
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:  "filter",
+		Value: fmt.Sprintf("%v", filter),
+	})
+
+	if len(options) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:  "options",
+			Value: fmt.Sprintf("%v", options[0]),
+		})
+	}
+	return v
+}
+
+func (r activityActions) AggregateRaw(pipeline []interface{}, options ...interface{}) activityAggregateRaw {
+	var v activityAggregateRaw
+	v.query = builder.NewQuery()
+	v.query.Engine = r.client
+	v.query.Method = "aggregateRaw"
+	v.query.Operation = "query"
+	v.query.Model = "Activity"
+
+	parsedPip := []interface{}{}
+	for _, p := range pipeline {
+		parsedPip = append(parsedPip, fmt.Sprintf("%v", p))
+	}
+
+	v.query.Inputs = append(v.query.Inputs, builder.Input{
+		Name:  "pipeline",
+		Value: parsedPip,
+	})
+
+	if len(options) > 0 {
+		v.query.Inputs = append(v.query.Inputs, builder.Input{
+			Name:  "options",
+			Value: fmt.Sprintf("%v", options[0]),
+		})
+	}
+	return v
+}
+
+func (r activityAggregateRaw) Exec(ctx context.Context) ([]ActivityModel, error) {
+	var v []ActivityModel
+	if err := r.query.Exec(ctx, &v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (r activityAggregateRaw) ExecInner(ctx context.Context) ([]InnerActivity, error) {
+	var v []InnerActivity
 	if err := r.query.Exec(ctx, &v); err != nil {
 		return nil, err
 	}

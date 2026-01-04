@@ -237,6 +237,7 @@ func (s *AuthService) GetProfile(ctx context.Context, userID string) (*models.Us
 	).With(
 		db.User.Contacts.Fetch(),
 		db.User.Template.Fetch(),
+		db.User.Activities.Fetch(),
 	).Exec(ctx)
 
 	if err != nil {
@@ -253,6 +254,16 @@ func (s *AuthService) GetProfile(ctx context.Context, userID string) (*models.Us
 			Email:       c.Email,
 			IsSent:      c.IsSent,
 			CreatedAt:   c.CreatedAt,
+		})
+	}
+
+	// Map activities
+	activities := []models.ActivityResponse{}
+	for _, a := range user.Activities() {
+		activities = append(activities, models.ActivityResponse{
+			ID:          a.ID,
+			Description: a.Description,
+			CreatedAt:   a.CreatedAt,
 		})
 	}
 
@@ -350,8 +361,11 @@ Resume: https://drive.google.com/file/d/129hWwlFE7KeGBNSuiWqbU5x9BB7gvrKl/view?u
 		ProfessionalEmail: professionalEmail,
 		MailAppPassword:   mailAppPassword,
 		DailyLimit:        user.DailyLimit,
+		PdfUploadCount:    user.PdfUploadCount, // Added
+		EmailsSent:        user.EmailsSent,     // Added
 		CreatedAt:         user.CreatedAt,
 		Contacts:          contacts,
+		Activities:        activities, // Added
 		Template:          template,
 	}, nil
 }

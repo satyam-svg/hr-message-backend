@@ -9,21 +9,26 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/generative-ai-go/genai"
+	"github.com/satyam-svg/hr-message-backend/internals/services"
 	"github.com/satyam-svg/hr-message-backend/prisma/db"
 	"google.golang.org/api/option"
 )
 
 // PDFHandler handles PDF HTTP requests
 type PDFHandler struct {
-	client *db.PrismaClient
+	client      *db.PrismaClient
+	userService *services.UserService
 }
 
 // NewPDFHandler creates a new PDF handler
-func NewPDFHandler(client *db.PrismaClient) *PDFHandler {
+func NewPDFHandler(client *db.PrismaClient, userService *services.UserService) *PDFHandler {
 	return &PDFHandler{
-		client: client,
+		client:      client,
+		userService: userService,
 	}
 }
+
+//func to incease the count of pdf upload in backend usko mai call kar dunga UploadPdf me
 
 func (h *PDFHandler) UploadPDF(c *fiber.Ctx) error {
 	file, err := c.FormFile("file")
@@ -149,6 +154,12 @@ func (h *PDFHandler) UploadPDF(c *fiber.Ctx) error {
 			"email":        contact.Email,
 			"is_sent":      contact.IsSent,
 		})
+	}
+
+	// Increment PDF upload count
+	if err := h.userService.IncrementPDFUploadCount(userID); err != nil {
+		log.Printf("Failed to update user stats: %v", err)
+		// Don't fail the request, just log
 	}
 
 	return c.JSON(fiber.Map{
