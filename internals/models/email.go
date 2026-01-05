@@ -3,7 +3,7 @@ package models
 // SendEmailRequest represents the request payload for sending an email
 type SendEmailRequest struct {
 	SenderEmail     string   `json:"sender_email" validate:"required,email"`
-	SenderPassword  string   `json:"sender_password" validate:"required"`
+	SenderPassword  string   `json:"sender_password"` // Fetched from DB internally
 	RecipientEmail  string   `json:"recipient_email"`
 	Subject         string   `json:"subject" validate:"required"`
 	Body            string   `json:"body" validate:"required"`

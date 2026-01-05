@@ -52,7 +52,7 @@ func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
 		// Parse form fields
 		req.SendToAll = c.FormValue("send_to_all") == "true"
 		req.SenderEmail = c.FormValue("sender_email")
-		req.SenderPassword = c.FormValue("sender_password")
+		// Password is no longer accepted from client for security
 		if !req.SendToAll {
 			req.RecipientEmail = c.FormValue("recipient_email")
 		}
@@ -98,10 +98,11 @@ func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.SenderEmail == "" || req.SenderPassword == "" || req.Subject == "" || req.Body == "" {
+	// Note: sender_email and sender_password are no longer required from client as they are fetched from DB
+	if req.Subject == "" || req.Body == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
 			Error:   "validation_error",
-			Message: "Required fields missing: sender_email, sender_password, subject, body",
+			Message: "Required fields missing: subject, body",
 		})
 	}
 
@@ -115,16 +116,17 @@ func (h *EmailHandler) SendEmail(c *fiber.Ctx) error {
 	// Get UserID from context
 	userId := c.Locals("userId").(string)
 
-	// Call service to send email in background
-	if err := h.emailService.SendEmailBackground(userId, req); err != nil {
+	// Call service to send email synchronously (Foreground)
+	// This helps catch errors immediately and prevents Render from killing background goroutines
+	if err := h.emailService.SendEmailForUser(userId, req); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(models.ErrorResponse{
-			Error:   "server_error",
-			Message: "Failed to start background email: " + err.Error(),
+			Error:   "email_send_error",
+			Message: "Failed to send email: " + err.Error(),
 		})
 	}
 
 	return c.Status(fiber.StatusOK).JSON(models.SendEmailResponse{
-		Message: "Email sending started in background",
+		Message: "Email sent successfully",
 		Success: true,
 	})
 }

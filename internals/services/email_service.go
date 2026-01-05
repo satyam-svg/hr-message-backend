@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"os"
-	"strconv"
+	"net"
+	"net/smtp"
 	"strings"
 	"time"
 
@@ -120,94 +120,153 @@ func (s *EmailService) StartEmailCampaign(userId string) error {
 	return nil
 }
 
-// SendEmail sends an email using Gmail SMTP
+// SendEmail sends an email using Gmail SMTP with custom dialer to avoid timeouts
 func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
-	// Create a new message
+	// Create a new message using gomail for proper MIME/Attachment handling
 	m := gomail.NewMessage()
-
-	// Set email headers
 	m.SetHeader("From", req.SenderEmail)
 	m.SetHeader("To", req.RecipientEmail)
 	m.SetHeader("Subject", req.Subject)
 
-	// Set email body
-	// Convert newlines to HTML breaks for proper rendering
+	// Convert newlines to HTML breaks
 	htmlBody := strings.ReplaceAll(req.Body, "\n", "<br>")
 	m.SetBody("text/html", htmlBody)
 
-	// Attach files if provided
 	for _, filePath := range req.AttachmentPaths {
 		m.Attach(filePath)
 	}
 
-	// Configure SMTP settings from environment or default to Gmail
-	smtpHost := os.Getenv("SMTP_HOST")
-	if smtpHost == "" {
-		smtpHost = "smtp.gmail.com"
+	// Configure SMTP Settings
+	smtpHost := "smtp.gmail.com"
+	smtpPort := "587"
+
+	// Custom Dialer with Timeout (Critical for Render)
+	d := net.Dialer{
+		Timeout: 20 * time.Second,
 	}
 
-	smtpPort := 587 // Default to 587 (TLS)
-	if portStr := os.Getenv("SMTP_PORT"); portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil {
-			smtpPort = p
-		}
-	} else if smtpHost == "smtp.gmail.com" {
-		smtpPort = 465 // Default to 465 for Gmail based on recent testing
+	// 1. Connect to SMTP Server
+	conn, err := d.Dial("tcp", smtpHost+":"+smtpPort)
+	if err != nil {
+		return fmt.Errorf("failed to dial smtp: %w", err)
+	}
+	defer conn.Close()
+
+	// 2. Initialize SMTP Client
+	c, err := smtp.NewClient(conn, smtpHost)
+	if err != nil {
+		return fmt.Errorf("failed to create smtp client: %w", err)
+	}
+	defer c.Quit()
+
+	// 3. Start TLS
+	tlsConfig := &tls.Config{
+		ServerName: smtpHost,
+	}
+	if err = c.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("failed to start tls: %w", err)
 	}
 
-	d := gomail.NewDialer(smtpHost, smtpPort, req.SenderEmail, req.SenderPassword)
+	// 4. Authenticate
+	auth := smtp.PlainAuth(
+		"",
+		req.SenderEmail,
+		req.SenderPassword,
+		smtpHost,
+	)
+	if err = c.Auth(auth); err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
 
-	// Bypass SSL verification to avoid timeouts/handshake issues on some networks
-	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+	// 5. Send Email
+	if err = c.Mail(req.SenderEmail); err != nil {
+		return fmt.Errorf("failed to set sender: %w", err)
+	}
+	if err = c.Rcpt(req.RecipientEmail); err != nil {
+		return fmt.Errorf("failed to set recipient: %w", err)
+	}
 
-	// Send the email
-	if err := d.DialAndSend(m); err != nil {
-		return fmt.Errorf("failed to send email: %w", err)
+	// 6. Write Data (using gomail's WriteTo to preserve MIME structure)
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("failed to create data writer: %w", err)
+	}
+
+	if _, err = m.WriteTo(w); err != nil {
+		w.Close() // Close writer if write fails
+		return fmt.Errorf("failed to write email content: %w", err)
+	}
+
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("failed to close data writer: %w", err)
 	}
 
 	return nil
 }
 
-// SendEmailBackground sends an email in the background
-func (s *EmailService) SendEmailBackground(userId string, req models.SendEmailRequest) error {
-	go func() {
-		if req.SendToAll {
-			// Fetch all contacts for the user
-			ctx := context.Background()
-			contacts, err := s.client.Contact.FindMany(
-				db.Contact.UserID.Equals(userId),
-			).Exec(ctx)
-			if err != nil {
-				fmt.Printf("Error fetching contacts for bulk email: %v\n", err)
-				return
+// SendEmailForUser sends an email synchronously, fetching credentials from DB
+func (s *EmailService) SendEmailForUser(userId string, req models.SendEmailRequest) error {
+	ctx := context.Background()
+
+	// 1. Fetch User Credentials
+	user, err := s.client.User.FindUnique(
+		db.User.ID.Equals(userId),
+	).Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	professionalEmail, ok1 := user.ProfessionalEmail()
+	mailAppPassword, ok2 := user.MailAppPassword()
+	if !ok1 || !ok2 || professionalEmail == "" || mailAppPassword == "" {
+		return fmt.Errorf("user email credentials not configured. Please configure them in settings")
+	}
+
+	// 2. Set Credentials in Request
+	req.SenderEmail = professionalEmail
+	req.SenderPassword = mailAppPassword
+
+	// 3. Send Logic
+	if req.SendToAll {
+		// Fetch all contacts (reuse existing logic from StartEmailCampaign or just basic fetch)
+		contacts, err := s.client.Contact.FindMany(
+			db.Contact.UserID.Equals(userId),
+		).Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to fetch contacts: %w", err)
+		}
+
+		// fmt.Printf("Starting synchronous bulk email to %d contacts\n", len(contacts))
+
+		for i, contact := range contacts {
+			emailReq := req
+			emailReq.RecipientEmail = contact.Email
+
+			// Add basic personalization if simple body
+			// (StartEmailCampaign does this better with templates, but respecting existing structure)
+
+			if err := s.SendEmail(emailReq); err != nil {
+				fmt.Printf("Error sending email to %s: %v\n", contact.Email, err)
+				// Don't abort entire batch on single failure? Or return error?
+				// For synchronous HTTP response, maybe we should return error if critical,
+				// but for bulk, usually we want to try best effort.
+				// Returning error here will stop the loop and return 500 to user.
+				// Let's log and continue for now, or maybe return error?
+				// User said: "return error" in "Fix #1".
+				return fmt.Errorf("failed to send to %s: %w", contact.Email, err)
 			}
 
-			fmt.Printf("Starting bulk email to %d contacts\n", len(contacts))
-
-			for i, contact := range contacts {
-				// Create a copy of the request for this contact
-				emailReq := req
-				emailReq.RecipientEmail = contact.Email
-
-				// Send email
-				if err := s.SendEmail(emailReq); err != nil {
-					fmt.Printf("Error sending email to %s: %v\n", contact.Email, err)
-				} else {
-					fmt.Printf("Email sent to %s (%d/%d)\n", contact.Email, i+1, len(contacts))
-				}
-
-				// Wait for 1 minute before next email (except after the last one)
-				if i < len(contacts)-1 {
-					time.Sleep(1 * time.Minute)
-				}
-			}
-			fmt.Println("Bulk email campaign finished")
-		} else {
-			// Send single email
-			if err := s.SendEmail(req); err != nil {
-				fmt.Printf("Error sending email in background: %v\n", err)
+			// Small delay to be nice to Gmail
+			if i < len(contacts)-1 {
+				time.Sleep(2 * time.Second) // 2 seconds delay
 			}
 		}
-	}()
+	} else {
+		// Single Email
+		if err := s.SendEmail(req); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
