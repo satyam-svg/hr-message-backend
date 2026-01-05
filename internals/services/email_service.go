@@ -138,36 +138,33 @@ func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
 
 	// Configure SMTP Settings
 	smtpHost := "smtp.gmail.com"
-	smtpPort := "587"
+	smtpPort := "465" // SMTPS (Implicit SSL)
 
 	// Custom Dialer with Timeout (Critical for Render)
 	d := net.Dialer{
-		Timeout: 20 * time.Second,
+		Timeout: 30 * time.Second,
 	}
 
-	// 1. Connect to SMTP Server
-	conn, err := d.Dial("tcp", smtpHost+":"+smtpPort)
+	// 1. Connect to SMTP Server using TCP4 (IPv4 Only) and Implicit TLS
+	// Use tls.DialWithDialer to combine custom dialer (timeout) with SSL
+	tlsConfig := &tls.Config{
+		ServerName: smtpHost,
+	}
+
+	conn, err := tls.DialWithDialer(&d, "tcp4", smtpHost+":"+smtpPort, tlsConfig)
 	if err != nil {
-		return fmt.Errorf("failed to dial smtp: %w", err)
+		return fmt.Errorf("failed to dial smtp (SMTPS/465): %w", err)
 	}
 	defer conn.Close()
 
-	// 2. Initialize SMTP Client
+	// 2. Initialize SMTP Client (already secure)
 	c, err := smtp.NewClient(conn, smtpHost)
 	if err != nil {
 		return fmt.Errorf("failed to create smtp client: %w", err)
 	}
 	defer c.Quit()
 
-	// 3. Start TLS
-	tlsConfig := &tls.Config{
-		ServerName: smtpHost,
-	}
-	if err = c.StartTLS(tlsConfig); err != nil {
-		return fmt.Errorf("failed to start tls: %w", err)
-	}
-
-	// 4. Authenticate
+	// 3. Authenticate
 	auth := smtp.PlainAuth(
 		"",
 		req.SenderEmail,
@@ -178,7 +175,7 @@ func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
 		return fmt.Errorf("failed to authenticate: %w", err)
 	}
 
-	// 5. Send Email
+	// 4. Send Email
 	if err = c.Mail(req.SenderEmail); err != nil {
 		return fmt.Errorf("failed to set sender: %w", err)
 	}
@@ -186,7 +183,7 @@ func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
 		return fmt.Errorf("failed to set recipient: %w", err)
 	}
 
-	// 6. Write Data (using gomail's WriteTo to preserve MIME structure)
+	// 5. Write Data (using gomail's WriteTo to preserve MIME structure)
 	w, err := c.Data()
 	if err != nil {
 		return fmt.Errorf("failed to create data writer: %w", err)
