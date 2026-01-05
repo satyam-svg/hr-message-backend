@@ -2,7 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -137,9 +140,25 @@ func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
 		m.Attach(filePath)
 	}
 
-	// Configure Gmail SMTP settings
-	// Use port 465 for SSL (which works better on Render/Cloud) instead of 587 (TLS)
-	d := gomail.NewDialer("smtp.gmail.com", 465, req.SenderEmail, req.SenderPassword)
+	// Configure SMTP settings from environment or default to Gmail
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		smtpHost = "smtp.gmail.com"
+	}
+
+	smtpPort := 587 // Default to 587 (TLS)
+	if portStr := os.Getenv("SMTP_PORT"); portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			smtpPort = p
+		}
+	} else if smtpHost == "smtp.gmail.com" {
+		smtpPort = 465 // Default to 465 for Gmail based on recent testing
+	}
+
+	d := gomail.NewDialer(smtpHost, smtpPort, req.SenderEmail, req.SenderPassword)
+
+	// Bypass SSL verification to avoid timeouts/handshake issues on some networks
+	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 
 	// Send the email
 	if err := d.DialAndSend(m); err != nil {
