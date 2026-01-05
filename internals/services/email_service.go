@@ -138,7 +138,8 @@ func (s *EmailService) SendEmail(req models.SendEmailRequest) error {
 	}
 
 	// Configure Gmail SMTP settings
-	d := gomail.NewDialer("smtp.gmail.com", 587, req.SenderEmail, req.SenderPassword)
+	// Use port 465 for SSL (which works better on Render/Cloud) instead of 587 (TLS)
+	d := gomail.NewDialer("smtp.gmail.com", 465, req.SenderEmail, req.SenderPassword)
 
 	// Send the email
 	if err := d.DialAndSend(m); err != nil {
